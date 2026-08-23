@@ -86,6 +86,24 @@ var SPOTS = [
   makeSpot("punta-prosciutto", "Punta Prosciutto", "Ionio", "Costa ionica", 40.2969, 17.7681, "W")
 ];
 
+var WEBCAMS = [
+  { name:"Casalabate", view:"Marina di Trepuzzi", lat:40.525, lon:18.121, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/casalabate-marina-di-trepuzzi.html" },
+  { name:"San Cataldo", view:"Spiaggia e costa", lat:40.378, lon:18.306, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/marina-san-cataldo.html" },
+  { name:"Alimini", view:"Spiaggia di Alimini", lat:40.208, lon:18.458, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/spiaggia-di-alimini.html" },
+  { name:"Otranto", view:"Lungomare degli Eroi", lat:40.148, lon:18.487, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/lungomare-di-otranto.html" },
+  { name:"Santa Cesarea Terme", view:"Palazzo Sticchi e costa", lat:40.036, lon:18.456, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/santa-cesarea-terme.html" },
+  { name:"Castro Marina", view:"Porto di Castro", lat:40.007, lon:18.426, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/castro-marina-porto.html" },
+  { name:"Santa Maria di Leuca", view:"Panorama sul mare", lat:39.797, lon:18.359, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/santa-maria-di-leuca.html" },
+  { name:"Torre Mozza", view:"Spiaggia di Ugento", lat:39.870, lon:18.147, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/torre-mozza-ugento.html" },
+  { name:"Torre San Giovanni", view:"Porto e spiaggia", lat:39.891, lon:18.114, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/torre-san-giovanni-ugento.html" },
+  { name:"Marina di Alliste", view:"Costa ionica", lat:39.947, lon:18.052, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/marina-di-alliste.html" },
+  { name:"Baia Verde", view:"Spiaggia di Gallipoli", lat:40.037, lon:18.018, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/gallipoli.html" },
+  { name:"Gallipoli", view:"Porticciolo del Canneto", lat:40.056, lon:17.993, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/porto-di-gallipoli.html" },
+  { name:"Lido Conchiglie", view:"Spiaggia del litorale nord", lat:40.105, lon:18.017, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/gallipoli-lido-conchiglie.html" },
+  { name:"Padula Bianca", view:"Spiaggia di Padula Bianca", lat:40.095, lon:18.004, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/padula-bianca-gallipoli.html" },
+  { name:"Porto Cesareo", view:"Porto e Isola dei Conigli", lat:40.260, lon:17.898, url:"https://www.skylinewebcams.com/it/webcam/italia/puglia/lecce/porto-cesareo.html" }
+];
+
 var WEATHER_MODELS = [
   { id:"italia_meteo_arpae_icon_2i", label:"ItaliaMeteo ICON-2I" },
   { id:"ecmwf_ifs", label:"ECMWF IFS" },
@@ -132,6 +150,16 @@ function clamp(value, min, max) {
 
 function validNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+function distanceKm(a, b) {
+  var radius = 6371;
+  var latDelta = (b.lat - a.lat) * Math.PI / 180;
+  var lonDelta = (b.lon - a.lon) * Math.PI / 180;
+  var value = Math.sin(latDelta / 2) * Math.sin(latDelta / 2) +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) *
+    Math.sin(lonDelta / 2) * Math.sin(lonDelta / 2);
+  return 2 * radius * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
 function mean(values) {
@@ -618,6 +646,100 @@ function renderHero(day, current) {
   $("gustDetail").textContent = validNumber(current.gust) && current.gust > 35 ? "da tenere d'occhio" : "raffica prevista";
 }
 
+function renderHeroDays() {
+  var container = $("heroDays");
+  container.replaceChildren();
+  state.days.slice(0, 3).forEach(function(day, index) {
+    var card = document.createElement("article");
+    card.className = "hero-day-card";
+
+    var top = document.createElement("div");
+    top.className = "hero-day-top";
+    var label = document.createElement("span");
+    label.textContent = index === 0 ? "Oggi" : index === 1 ? "Domani" : formatDay(day.date, { weekday:"long" });
+    var score = document.createElement("strong");
+    score.textContent = day.score + "/100";
+    top.append(label, score);
+
+    var verdict = document.createElement("p");
+    verdict.textContent = verdictFor(day).short;
+
+    var meta = document.createElement("div");
+    meta.className = "hero-day-meta";
+    var windowItem = document.createElement("span");
+    windowItem.textContent = "Meglio ";
+    var windowValue = document.createElement("strong");
+    windowValue.textContent = day.window;
+    windowItem.appendChild(windowValue);
+    var windItem = document.createElement("span");
+    windItem.textContent = "Vento ";
+    var windStrong = document.createElement("strong");
+    windStrong.textContent = windValue(day.summary.wind);
+    windItem.appendChild(windStrong);
+    var waveItem = document.createElement("span");
+    waveItem.textContent = "Onde ";
+    var waveStrong = document.createElement("strong");
+    waveStrong.textContent = numberValue(day.summary.wave, 1, " m");
+    waveItem.appendChild(waveStrong);
+    meta.append(windowItem, windItem, waveItem);
+
+    card.append(top, verdict, meta);
+    container.appendChild(card);
+  });
+}
+
+function renderWebcams() {
+  $("webcamSpotName").textContent = state.spot.name;
+  var container = $("webcamCards");
+  container.replaceChildren();
+
+  var nearby = WEBCAMS.map(function(webcam) {
+    return { webcam:webcam, distance:distanceKm(state.spot, webcam) };
+  }).filter(function(item) {
+    return item.distance <= 15;
+  }).sort(function(a, b) {
+    return a.distance - b.distance;
+  }).slice(0, 2);
+
+  nearby.forEach(function(item) {
+    var card = document.createElement("article");
+    card.className = "webcam-card";
+    var copy = document.createElement("div");
+    copy.className = "webcam-card-copy";
+
+    var live = document.createElement("span");
+    live.className = "webcam-live";
+    live.textContent = "WEBCAM PUBBLICA";
+    var title = document.createElement("h3");
+    title.textContent = item.webcam.name;
+    var detail = document.createElement("p");
+    detail.textContent = item.webcam.view + " · " +
+      (item.distance < 1 ? "nella località" : item.distance.toFixed(1).replace(".", ",") + " km");
+    var provider = document.createElement("small");
+    provider.className = "webcam-provider";
+    provider.textContent = "SkylineWebcams · verificata il 24 agosto 2026";
+    copy.append(live, title, detail, provider);
+
+    var link = document.createElement("a");
+    link.className = "webcam-open";
+    link.href = item.webcam.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Apri webcam ↗";
+    link.setAttribute("aria-label", "Apri la webcam di " + item.webcam.name + " sul sito del gestore");
+
+    card.append(copy, link);
+    container.appendChild(card);
+  });
+
+  if (!nearby.length) {
+    var empty = document.createElement("p");
+    empty.className = "webcam-empty";
+    empty.textContent = "Nessuna webcam pubblica verificata entro 15 km da questa località.";
+    container.appendChild(empty);
+  }
+}
+
 function renderDays() {
   $("dayCards").innerHTML = state.days.slice(0, 5).map(function(day, index) {
     var verdict = verdictFor(day);
@@ -689,6 +811,8 @@ function renderAll() {
     state.selectedDate = heroDay.date;
   }
   renderHero(heroDay, current);
+  renderHeroDays();
+  renderWebcams();
   renderDays();
   renderHourly();
   renderModels();
