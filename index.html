@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#082f3d">
+  <meta name="description" content="Meteo mare e vento per il Salento, confrontati su più modelli previsionali.">
+  <meta property="og:title" content="MareVero — Salento">
+  <meta property="og:description" content="Una risposta chiara alla domanda: oggi si va al mare?">
+  <title>MareVero — Salento</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="MareVero, home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>MareVero</strong><small>Salento</small></span>
+      </a>
+      <div class="top-actions">
+        <span class="live-pill"><span></span>Dati live</span>
+        <button id="installBtn" class="ghost-button" type="button" hidden>Installa</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="location-bar" aria-label="Selezione località">
+        <label for="spotSelect">Dove andiamo?</label>
+        <div class="select-row">
+          <select id="spotSelect" aria-label="Scegli una spiaggia del Salento"></select>
+          <button id="refreshBtn" class="refresh-button" type="button" aria-label="Aggiorna le previsioni">↻</button>
+        </div>
+        <p id="updatedAt">Confronto dei modelli in corso…</p>
+      </section>
+
+      <div id="errorBanner" class="error-banner" role="alert" hidden></div>
+
+      <section class="hero-card" aria-labelledby="heroTitle">
+        <div class="hero-copy">
+          <p class="eyebrow" id="heroDate">OGGI</p>
+          <h1 id="heroTitle"><span id="verdict">Vediamo se è giornata.</span></h1>
+          <p id="verdictSub">Incrociamo meteo, vento e mare in un’unica previsione.</p>
+          <div class="best-window">
+            <span>Finestra migliore</span>
+            <strong id="bestWindow">—</strong>
+          </div>
+        </div>
+        <div id="scoreRing" class="score-ring" style="--score:0" aria-label="Indice mare">
+          <div><strong id="scoreValue">—</strong><span>/100</span></div>
+        </div>
+        <div class="sea-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+      </section>
+
+      <section class="consensus-strip" aria-label="Affidabilità della previsione">
+        <div>
+          <span class="section-kicker">CONSENSO</span>
+          <strong id="confidenceLabel">Calcolo in corso</strong>
+        </div>
+        <p id="confidenceText">Confrontiamo i modelli, non facciamo una media cieca.</p>
+        <div class="confidence-meter" aria-hidden="true"><i id="confidenceBar"></i></div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Condizioni principali">
+        <article class="metric-card warm">
+          <span class="metric-icon">☀</span>
+          <p>Temperatura</p>
+          <strong id="tempValue">—</strong>
+          <small id="feelsValue">—</small>
+        </article>
+        <article class="metric-card wind-card">
+          <span id="windArrow" class="wind-arrow" aria-hidden="true">↑</span>
+          <p>Vento</p>
+          <strong id="windValue">—</strong>
+          <small id="windDetail">—</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">≋</span>
+          <p>Onde</p>
+          <strong id="waveValue">—</strong>
+          <small id="waveDetail">—</small>
+        </article>
+        <article class="metric-card cool">
+          <span class="metric-icon">◉</span>
+          <p>Acqua</p>
+          <strong id="seaTempValue">—</strong>
+          <small>superficie del mare</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">☂</span>
+          <p>Pioggia</p>
+          <strong id="rainValue">—</strong>
+          <small id="cloudValue">—</small>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">◎</span>
+          <p>Raffiche</p>
+          <strong id="gustValue">—</strong>
+          <small id="gustDetail">—</small>
+        </article>
+      </section>
+
+      <section class="forecast-section" aria-labelledby="forecastTitle">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">I PROSSIMI GIORNI</span>
+            <h2 id="forecastTitle">Quando conviene davvero</h2>
+          </div>
+          <div class="unit-toggle" role="group" aria-label="Unità del vento">
+            <button class="unit-button active" data-unit="kmh" type="button">km/h</button>
+            <button class="unit-button" data-unit="kn" type="button">nodi</button>
+          </div>
+        </div>
+        <div id="dayCards" class="day-cards" aria-live="polite"></div>
+      </section>
+
+      <section class="hourly-section" aria-labelledby="hourlyTitle">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">ORA PER ORA</span>
+            <h2 id="hourlyTitle">La giornata in dettaglio</h2>
+          </div>
+          <span id="selectedDayLabel" class="selected-day-label">—</span>
+        </div>
+        <div id="hourlyTrack" class="hourly-track"></div>
+      </section>
+
+      <details class="models-panel">
+        <summary>
+          <span><span class="section-kicker">TRASPARENZA</span><strong>Guarda cosa dicono i singoli modelli</strong></span>
+          <span class="summary-plus">+</span>
+        </summary>
+        <div class="models-intro">
+          <p>Le app spesso mostrano un solo risultato. MareVero confronta direttamente i modelli previsionali e ti fa vedere quanto sono d’accordo.</p>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Modello meteo</th><th>Temp.</th><th>Vento</th><th>Raffiche</th><th>Pioggia</th></tr></thead>
+            <tbody id="weatherModelsBody"></tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Modello marino</th><th>Onde</th><th>Periodo</th><th>Direzione</th></tr></thead>
+            <tbody id="waveModelsBody"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <section class="method-card">
+        <span class="section-kicker">COME FUNZIONA</span>
+        <h2>Una previsione, molte fonti.</h2>
+        <p>Per vento e meteo incrociamo modelli di ItaliaMeteo, ECMWF, DWD e NOAA. Per il mare confrontiamo DWD, Météo-France, ECMWF e NOAA. Il punteggio considera temperatura, pioggia, vento, raffiche e onde nella fascia da spiaggia.</p>
+        <div class="source-chips">
+          <span>ItaliaMeteo</span><span>ECMWF</span><span>DWD</span><span>NOAA</span><span>Météo-France</span>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Dati previsionali via <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open‑Meteo</a>. Aggiornati a ogni apertura.</p>
+      <p class="disclaimer">Indicazioni per organizzare una giornata in spiaggia. Non usare per navigazione, emergenze o sicurezza in mare.</p>
+    </footer>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite">
+    <div class="loader-wave" aria-hidden="true"><i></i><i></i><i></i></div>
+    <strong>Stiamo chiedendo a tutti i modelli…</strong>
+    <span>Meteo, vento e mare arrivano insieme.</span>
+  </div>
+</body>
+</html>
