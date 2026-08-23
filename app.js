@@ -100,6 +100,15 @@ var WAVE_MODELS = [
   { id:"ncep_gfswave025", label:"NOAA GFS Wave" }
 ];
 
+var WEATHER_FIELDS = [
+  "temperature_2m","apparent_temperature","precipitation","weather_code",
+  "cloud_cover","wind_speed_10m","wind_direction_10m","wind_gusts_10m",
+  "precipitation_probability","uv_index"
+];
+var WAVE_FIELDS = ["wave_height","wave_direction","wave_period"];
+var CACHE_TTL_MS = 10 * 60 * 1000;
+var REFRESH_COOLDOWN_MS = 60 * 1000;
+
 var state = {
   spot:null,
   unit:"kmh",
@@ -109,7 +118,10 @@ var state = {
   currentTime:null,
   weatherModels:[],
   waveModels:[],
-  sstModel:null
+  sstModel:null,
+  cache:new Map(),
+  inFlight:false,
+  lastNetworkAt:0
 };
 
 var $ = function(id) { return document.getElementById(id); };
@@ -228,11 +240,8 @@ function weatherUrl(spot, model, basic) {
   params.set("forecast_days", "7");
   params.set("wind_speed_unit", "kmh");
   params.set("models", model);
-  var variables = [
-    "temperature_2m","apparent_temperature","precipitation","weather_code",
-    "cloud_cover","wind_speed_10m","wind_direction_10m","wind_gusts_10m"
-  ];
-  if (!basic) variables.push("precipitation_probability","uv_index");
+  var variables = WEATHER_FIELDS.slice(0, 8);
+  if (!basic) variables = WEATHER_FIELDS.slice();
   params.set("hourly", variables.join(","));
   return "https://api.open-meteo.com/v1/forecast?" + params.toString();
 }
@@ -259,17 +268,50 @@ function sstUrl(spot) {
   return "https://marine-api.open-meteo.com/v1/marine?" + params.toString();
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, preserveArray) {
   var controller = new AbortController();
   var timeout = setTimeout(function() { controller.abort(); }, 16000);
   try {
-    var response = await fetch(url, { signal:controller.signal });
+    var response = await fetch(url, {
+      signal:controller.signal,
+      cache:"no-store",
+      credentials:"omit",
+      referrerPolicy:"no-referrer"
+    });
     var data = await response.json();
     if (!response.ok || data.error) throw new Error(data.reason || "Fonte non disponibile");
-    return Array.isArray(data) ? data[0] : data;
+    return Array.isArray(data) && !preserveArray ? data[0] : data;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function splitCombinedData(payload, models, fields) {
+  var responses = Array.isArray(payload) ? payload : [payload];
+  if (responses.length === models.length) {
+    return models.map(function(meta, index) {
+      return { meta:meta, data:responses[index] };
+    }).filter(function(item) { return item.data && item.data.hourly; });
+  }
+
+  var combined = responses[0];
+  if (!combined || !combined.hourly || !Array.isArray(combined.hourly.time)) return [];
+  var parsed = models.map(function(meta) {
+    var hourly = { time:combined.hourly.time };
+    fields.forEach(function(field) {
+      var modelKey = field + "_" + meta.id;
+      if (Array.isArray(combined.hourly[modelKey])) hourly[field] = combined.hourly[modelKey];
+    });
+    if (Object.keys(hourly).length === 1) return null;
+    var data = Object.assign({}, combined);
+    data.hourly = hourly;
+    return { meta:meta, data:data };
+  }).filter(Boolean);
+
+  if (!parsed.length && models.length === 1) {
+    return [{ meta:models[0], data:combined }];
+  }
+  return parsed;
 }
 
 async function loadWeatherModel(spot, meta) {
@@ -284,12 +326,38 @@ async function loadWeatherModel(spot, meta) {
   }
 }
 
+async function loadWeatherModels(spot) {
+  var modelIds = WEATHER_MODELS.map(function(meta) { return meta.id; }).join(",");
+  for (var attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      var payload = await fetchJson(weatherUrl(spot, modelIds, attempt === 1), true);
+      var combined = splitCombinedData(payload, WEATHER_MODELS, attempt === 1 ? WEATHER_FIELDS.slice(0, 8) : WEATHER_FIELDS);
+      if (combined.length >= 2) return combined;
+    } catch (error) {}
+  }
+  return Promise.all(WEATHER_MODELS.map(function(meta) {
+    return loadWeatherModel(spot, meta);
+  }));
+}
+
 async function loadWaveModel(spot, meta) {
   try {
     return { meta:meta, data:await fetchJson(waveUrl(spot, meta.id)) };
   } catch (error) {
     return { meta:meta, error:error };
   }
+}
+
+async function loadWaveModels(spot) {
+  var modelIds = WAVE_MODELS.map(function(meta) { return meta.id; }).join(",");
+  try {
+    var payload = await fetchJson(waveUrl(spot, modelIds), true);
+    var combined = splitCombinedData(payload, WAVE_MODELS, WAVE_FIELDS);
+    if (combined.length >= 2) return combined;
+  } catch (error) {}
+  return Promise.all(WAVE_MODELS.map(function(meta) {
+    return loadWaveModel(spot, meta);
+  }));
 }
 
 async function loadSst(spot) {
@@ -491,10 +559,25 @@ function reasonsFor(summary) {
   return "Il punto debole è " + reasons.slice(0, 2).join(" e ") + ".";
 }
 
-function scoreColor(score) {
-  if (score >= 80) return "#cdebd9";
-  if (score >= 62) return "#f7e3a9";
-  return "#ffd7cf";
+function scoreClass(score) {
+  if (score >= 80) return "score-good";
+  if (score >= 62) return "score-medium";
+  return "score-low";
+}
+
+function setLevelClass(element, prefix, value) {
+  Array.from(element.classList).forEach(function(className) {
+    if (className.indexOf(prefix) === 0) element.classList.remove(className);
+  });
+  element.classList.add(prefix + Math.round(clamp(value || 0, 0, 100) / 10));
+}
+
+function setWindDirectionClass(element, degrees) {
+  Array.from(element.classList).forEach(function(className) {
+    if (className.indexOf("dir-") === 0) element.classList.remove(className);
+  });
+  var direction = validNumber(degrees) ? Math.round(degrees / 45) % 8 : 0;
+  element.classList.add("dir-" + direction);
 }
 
 function closestPoint(rows, targetTime) {
@@ -513,19 +596,19 @@ function renderHero(day, current) {
   $("verdictSub").textContent = reasonsFor(day.summary);
   $("bestWindow").textContent = day.window;
   $("scoreValue").textContent = day.score;
-  $("scoreRing").style.setProperty("--score", day.score);
+  setLevelClass($("scoreRing"), "score-level-", day.score);
 
   var confidence = Math.round(day.summary.confidence || current.confidence || 0);
   var confidenceLabel = confidence >= 82 ? "Accordo alto" : confidence >= 66 ? "Accordo buono" : "Previsione variabile";
   $("confidenceLabel").textContent = confidenceLabel;
-  $("confidenceText").textContent = (current.modelCount || 0) + " modelli meteo attivi · scarto vento ±" + numberValue(current.windSpread, 1, " km/h");
-  $("confidenceBar").style.width = confidence + "%";
+  $("confidenceText").textContent = (current.modelCount || 0) + " modelli meteo attivi · scarto vento ±" + numberValue(current.windSpread, 1, " km/h") + " · indice euristico, non probabilità di accuratezza";
+  setLevelClass($("confidenceBar"), "level-", confidence);
 
   $("tempValue").textContent = numberValue(current.temperature, 0, "°");
   $("feelsValue").textContent = "percepiti " + numberValue(current.apparentTemperature, 0, "°");
   $("windValue").textContent = windValue(current.wind);
   $("windDetail").textContent = "da " + directionName(current.windDirection);
-  $("windArrow").style.transform = "rotate(" + (current.windDirection || 0) + "deg)";
+  setWindDirectionClass($("windArrow"), current.windDirection);
   $("waveValue").textContent = numberValue(current.wave, 1, " m");
   $("waveDetail").textContent = validNumber(current.wavePeriod) ? numberValue(current.wavePeriod, 0, " s di periodo") : "dato marino variabile";
   $("seaTempValue").textContent = numberValue(current.seaTemperature, 0, "°");
@@ -542,7 +625,7 @@ function renderDays() {
     var label = index === 0 ? "oggi" : formatDay(day.date, { weekday:"short", day:"numeric" });
     return '<button class="day-card' + active + '" type="button" data-date="' + day.date + '">' +
       '<span class="day-name">' + label + '</span>' +
-      '<div class="day-score-row"><span class="day-score" style="--score-bg:' + scoreColor(day.score) + '">' + day.score + '</span>' +
+      '<div class="day-score-row"><span class="day-score ' + scoreClass(day.score) + '">' + day.score + '</span>' +
       '<span class="day-weather" aria-hidden="true">' + weatherIcon(day.summary.weatherCode) + '</span></div>' +
       '<div class="day-verdict">' + verdict.short + '</div>' +
       '<div class="day-meta">' +
@@ -611,56 +694,103 @@ function renderAll() {
   renderModels();
 }
 
-async function loadSpot(spotId) {
-  var spot = SPOTS.find(function(item) { return item.id === spotId; }) || SPOTS[2];
+function updateSpotUrl(spot) {
+  var url = new URL(window.location.href);
+  url.searchParams.set("spot", spot.id);
+  history.replaceState(null, "", url);
+}
+
+function applySpotSnapshot(spot, snapshot, fromCache) {
   state.spot = spot;
+  state.weatherModels = snapshot.weatherModels;
+  state.waveModels = snapshot.waveModels;
+  state.sstModel = snapshot.sstModel;
+  state.rows = snapshot.rows;
+  state.days = snapshot.days;
+  state.selectedDate = null;
+  renderAll();
+
+  var time = new Intl.DateTimeFormat("it-IT", {
+    timeZone:"Europe/Rome", hour:"2-digit", minute:"2-digit"
+  }).format(new Date(snapshot.fetchedAt));
+  $("updatedAt").textContent = (fromCache ? "Dati di sessione delle " : "Aggiornato alle ") + time + " · " +
+    state.weatherModels.length + " modelli meteo, " + state.waveModels.length + " marini";
+
+  if (state.weatherModels.length < WEATHER_MODELS.length || state.waveModels.length < WAVE_MODELS.length) {
+    showError("Alcune fonti stanno aggiornando i dati. Il consenso usa solo i modelli disponibili in questo momento.");
+  }
+  $("spotSelect").value = spot.id;
+  updateSpotUrl(spot);
+}
+
+async function loadSpot(spotId, options) {
+  options = options || {};
+  var spot = SPOTS.find(function(item) { return item.id === spotId; }) || SPOTS[2];
+  var force = options.force === true;
+  var now = Date.now();
+  var cached = state.cache.get(spot.id);
+
+  if (state.inFlight) return;
+  if (!force && cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+    showError("");
+    applySpotSnapshot(spot, cached, true);
+    return;
+  }
+  if (force && now - state.lastNetworkAt < REFRESH_COOLDOWN_MS) {
+    var seconds = Math.ceil((REFRESH_COOLDOWN_MS - (now - state.lastNetworkAt)) / 1000);
+    $("updatedAt").textContent = "Dati già recenti · nuovo aggiornamento disponibile tra " + seconds + " s";
+    return;
+  }
+
+  state.inFlight = true;
   setLoading(true);
   showError("");
   $("refreshBtn").disabled = true;
+  $("spotSelect").disabled = true;
 
   try {
-    var weatherRaw = await Promise.all(WEATHER_MODELS.map(function(meta) { return loadWeatherModel(spot, meta); }));
-    var waveRaw = await Promise.all(WAVE_MODELS.map(function(meta) { return loadWaveModel(spot, meta); }));
-    var sstRaw = await loadSst(spot);
-    state.weatherModels = weatherRaw.filter(function(item) { return item.data; });
-    state.waveModels = waveRaw.filter(function(item) { return item.data; });
-    state.sstModel = sstRaw.data ? sstRaw : null;
+    state.lastNetworkAt = Date.now();
+    var raw = await Promise.all([
+      loadWeatherModels(spot),
+      loadWaveModels(spot),
+      loadSst(spot)
+    ]);
+    var weatherModels = raw[0].filter(function(item) { return item.data; });
+    var waveModels = raw[1].filter(function(item) { return item.data; });
+    var sstModel = raw[2].data ? raw[2] : null;
 
-    if (state.weatherModels.length < 2) {
+    if (weatherModels.length < 2) {
       throw new Error("Non ci sono abbastanza modelli disponibili per calcolare un consenso affidabile.");
     }
 
-    state.rows = buildConsensus(state.weatherModels, state.waveModels, state.sstModel);
-    state.days = groupDays(state.rows);
-    state.selectedDate = null;
-    renderAll();
-
-    var now = new Intl.DateTimeFormat("it-IT", {
-      timeZone:"Europe/Rome", hour:"2-digit", minute:"2-digit"
-    }).format(new Date());
-    $("updatedAt").textContent = "Aggiornato alle " + now + " · " + state.weatherModels.length + " modelli meteo, " + state.waveModels.length + " marini";
-
-    if (state.weatherModels.length < WEATHER_MODELS.length || state.waveModels.length < 2) {
-      showError("Alcune fonti stanno aggiornando i dati. Il consenso usa solo i modelli disponibili in questo momento.");
-    }
-
-    var url = new URL(window.location.href);
-    url.searchParams.set("spot", spot.id);
-    history.replaceState(null, "", url);
+    var rows = buildConsensus(weatherModels, waveModels, sstModel);
+    var snapshot = {
+      weatherModels:weatherModels,
+      waveModels:waveModels,
+      sstModel:sstModel,
+      rows:rows,
+      days:groupDays(rows),
+      fetchedAt:Date.now()
+    };
+    state.cache.set(spot.id, snapshot);
+    applySpotSnapshot(spot, snapshot, false);
   } catch (error) {
     showError(error.message || "Non siamo riusciti a scaricare le previsioni. Riprova tra poco.");
+    if (state.spot) $("spotSelect").value = state.spot.id;
   } finally {
+    state.inFlight = false;
     setLoading(false);
     $("refreshBtn").disabled = false;
+    $("spotSelect").disabled = false;
   }
 }
 
 function bindEvents() {
   $("spotSelect").addEventListener("change", function(event) {
-    loadSpot(event.target.value);
+    loadSpot(event.target.value, { force:false });
   });
   $("refreshBtn").addEventListener("click", function() {
-    loadSpot(state.spot ? state.spot.id : $("spotSelect").value);
+    loadSpot(state.spot ? state.spot.id : $("spotSelect").value, { force:true });
   });
   document.querySelectorAll(".unit-button").forEach(function(button) {
     button.addEventListener("click", function() {
@@ -678,6 +808,24 @@ function bindEvents() {
     renderDays();
     renderHourly();
     $("hourlyTitle").scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+}
+
+function setupLegalDialog() {
+  var dialog = $("legalDialog");
+  $("legalBtn").addEventListener("click", function() {
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  });
+  $("legalCloseBtn").addEventListener("click", function() {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  });
+  dialog.addEventListener("click", function(event) {
+    if (event.target === dialog) {
+      if (typeof dialog.close === "function") dialog.close();
+      else dialog.removeAttribute("open");
+    }
   });
 }
 
@@ -723,8 +871,9 @@ function init() {
   var initial = SPOTS.some(function(spot) { return spot.id === requested; }) ? requested : "porto-cesareo";
   $("spotSelect").value = initial;
   bindEvents();
+  setupLegalDialog();
   setupInstall();
-  loadSpot(initial);
+  loadSpot(initial, { force:false });
 }
 
 init();
