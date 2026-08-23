@@ -12,7 +12,7 @@ MareVero mette nella stessa schermata meteo, vento, raffiche, probabilità di pi
 
 ## Località incluse
 
-Punta Prosciutto, Torre Lapillo, Porto Cesareo, Gallipoli, Pescoluse, Santa Maria di Leuca, Castro, Otranto, Torre dell'Orso e San Foca.
+53 località costiere della provincia di Lecce, raggruppate in quattro zone: Lecce e nord Adriatico, costa adriatica, Capo di Leuca e costa ionica. La copertura va da Casalabate a Punta Prosciutto e comprende, tra le altre, Frigole, Torre Chianca, San Cataldo, Otranto, Castro, Leuca, Pescoluse, Gallipoli e Porto Cesareo.
 
 ## Pubblicazione
 
