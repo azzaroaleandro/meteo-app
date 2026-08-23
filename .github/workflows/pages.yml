@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - deployment-status.json
       - ci-diagnostics.json
+      - pages-diagnostics.json
   workflow_dispatch:
 
 concurrency:
@@ -30,25 +31,48 @@ jobs:
   deploy:
     needs: validate
     permissions:
-      contents: read
+      contents: write
       pages: write
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.publish.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Configure Pages
+        id: configure
+        continue-on-error: true
         uses: actions/configure-pages@v5
       - name: Upload static site
+        id: upload
+        if: ${{ steps.configure.outcome == 'success' }}
+        continue-on-error: true
         uses: actions/upload-pages-artifact@v4
         with:
           path: .
       - name: Deploy
-        id: deployment
+        id: publish
+        if: ${{ steps.upload.outcome == 'success' }}
+        continue-on-error: true
         uses: actions/deploy-pages@v4
+      - name: Record Pages step outcomes
+        if: ${{ always() }}
+        env:
+          CONFIGURE_OUTCOME: ${{ steps.configure.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          node -e "require('fs').writeFileSync('pages-diagnostics.json',JSON.stringify({configure:process.env.CONFIGURE_OUTCOME,upload:process.env.UPLOAD_OUTCOME,publish:process.env.PUBLISH_OUTCOME,commit:process.env.GITHUB_SHA,recorded_at:new Date().toISOString()},null,2)+'\n')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pages-diagnostics.json
+          git commit -m "Record Pages step diagnostics [skip ci]"
+          git push
+          test "$CONFIGURE_OUTCOME" = "success"
+          test "$UPLOAD_OUTCOME" = "success"
+          test "$PUBLISH_OUTCOME" = "success"
 
   verify:
     needs: deploy
@@ -56,8 +80,10 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout latest main
         uses: actions/checkout@v6
+        with:
+          ref: main
       - name: Verify public app
         run: curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors https://azzaroaleandro.github.io/meteo-app/ > /dev/null
       - name: Record successful deployment
@@ -67,26 +93,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deployment-status.json
           git commit -m "Record successful Pages deployment [skip ci]"
-          git push
-
-  report-failure:
-    needs: [validate, deploy]
-    if: ${{ always() && (needs.validate.result != 'success' || needs.deploy.result != 'success') }}
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    env:
-      VALIDATE_RESULT: ${{ needs.validate.result }}
-      DEPLOY_RESULT: ${{ needs.deploy.result }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Build diagnostic report
-        run: node -e "const fs=require('fs'),cp=require('child_process');const js=cp.spawnSync(process.execPath,['--check','app.js'],{encoding:'utf8'});fs.writeFileSync('ci-diagnostics.json',JSON.stringify({status:'failed',validate:process.env.VALIDATE_RESULT,deploy:process.env.DEPLOY_RESULT,javascript:{exit_code:js.status,output:(js.stderr||js.stdout||'syntax ok').trim()},commit:process.env.GITHUB_SHA,recorded_at:new Date().toISOString()},null,2)+'\n')"
-      - name: Publish diagnostic report
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ci-diagnostics.json
-          git commit -m "Record cloud deployment diagnostics [skip ci]"
           git push
