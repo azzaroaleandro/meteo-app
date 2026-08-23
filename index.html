@@ -53,6 +53,7 @@
         <div id="scoreRing" class="score-ring score-level-0" aria-label="Indice mare">
           <div><strong id="scoreValue">—</strong><span>/100</span></div>
         </div>
+        <div id="heroDays" class="hero-days" aria-label="Sintesi dei prossimi tre giorni" aria-live="polite"></div>
         <div class="sea-lines" aria-hidden="true"><i></i><i></i><i></i></div>
       </section>
 
@@ -102,6 +103,18 @@
           <strong id="gustValue">—</strong>
           <small id="gustDetail">—</small>
         </article>
+      </section>
+
+      <section class="webcam-section" aria-labelledby="webcamTitle">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">IL MARE ADESSO</span>
+            <h2 id="webcamTitle">Webcam vicino a <span id="webcamSpotName">questa località</span></h2>
+          </div>
+          <span class="webcam-external-badge">Link esterni</span>
+        </div>
+        <div id="webcamCards" class="webcam-cards" aria-live="polite"></div>
+        <p class="webcam-note">Le webcam non sono incorporate: si aprono sul sito del gestore soltanto dopo il tuo clic, così MareVero non carica pubblicità, cookie o tracker esterni. Immagini e disponibilità dipendono dal gestore.</p>
       </section>
 
       <section class="forecast-section" aria-labelledby="forecastTitle">
@@ -198,6 +211,7 @@
           <p>MareVero non crea account, non imposta cookie, non integra pubblicità, analytics, pixel, fingerprinting, geolocalizzazione o strumenti di profilazione. La località scelta compare soltanto nel parametro <code>spot</code> dell’indirizzo; le coordinate predefinite della spiaggia sono inviate direttamente dal browser alle API di Open‑Meteo.</p>
           <p>Open‑Meteo dichiara di poter conservare per finalità tecniche e anti‑abuso indirizzo IP, URL richiesto e coordinate fino a 90 giorni: consulta i suoi <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener noreferrer">Termini e Privacy</a>. Il sito è ospitato da GitHub Pages, che può trattare log tecnici secondo la <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub Privacy Statement</a>.</p>
           <p>Il Service Worker usa esclusivamente la Cache Storage del browser per i file statici essenziali, così da migliorare prestazioni e disponibilità offline. Le risposte previsionali sono riutilizzate per non più di 10 minuti e restano soltanto nella memoria volatile della pagina fino alla sua chiusura; non sono scritte in cookie o archivi persistenti. La cache tecnica può essere rimossa cancellando i dati del sito o disinstallando la web app.</p>
+          <p>Le webcam sono semplici collegamenti esterni: MareVero non incorpora video, immagini o script del gestore e non effettua alcuna richiesta verso quei siti prima del clic. Aprendo una webcam si applicano privacy e cookie policy del relativo gestore.</p>
           <p>Poiché non sono presenti cookie o tecnologie non necessarie, non viene mostrato un banner di consenso. Per segnalazioni: <a href="https://github.com/azzaroaleandro" target="_blank" rel="noopener noreferrer">profilo GitHub del progetto</a>.</p>
         </section>
 
