@@ -125,7 +125,13 @@ var WEATHER_FIELDS = [
 ];
 var WAVE_FIELDS = ["wave_height","wave_direction","wave_period"];
 var CACHE_TTL_MS = 10 * 60 * 1000;
+var REGIONAL_CACHE_TTL_MS = 15 * 60 * 1000;
 var REFRESH_COOLDOWN_MS = 60 * 1000;
+var FAVORITES_KEY = "marevero-favorites-v1";
+var REGIONAL_SPOT_IDS = [
+  "san-cataldo","torre-orso","alimini","otranto","santa-cesarea","castro",
+  "pescoluse","torre-mozza","torre-san-giovanni","gallipoli","porto-cesareo","punta-prosciutto"
+];
 
 var state = {
   spot:null,
@@ -139,7 +145,12 @@ var state = {
   sstModel:null,
   cache:new Map(),
   inFlight:false,
-  lastNetworkAt:0
+  lastNetworkAt:0,
+  favorites:[],
+  regionalRanking:null,
+  regionalFetchedAt:0,
+  regionalInFlight:false,
+  nearMeInFlight:false
 };
 
 var $ = function(id) { return document.getElementById(id); };
@@ -296,6 +307,30 @@ function sstUrl(spot) {
   return "https://marine-api.open-meteo.com/v1/marine?" + params.toString();
 }
 
+function batchWeatherUrl(spots) {
+  var params = new URLSearchParams();
+  params.set("latitude", spots.map(function(spot) { return spot.lat; }).join(","));
+  params.set("longitude", spots.map(function(spot) { return spot.lon; }).join(","));
+  params.set("timezone", "Europe/Rome");
+  params.set("forecast_days", "2");
+  params.set("wind_speed_unit", "kmh");
+  params.set("hourly", [
+    "temperature_2m","apparent_temperature","precipitation","precipitation_probability",
+    "weather_code","cloud_cover","wind_speed_10m","wind_direction_10m","wind_gusts_10m"
+  ].join(","));
+  return "https://api.open-meteo.com/v1/forecast?" + params.toString();
+}
+
+function batchMarineUrl(spots) {
+  var params = new URLSearchParams();
+  params.set("latitude", spots.map(function(spot) { return spot.marineLat; }).join(","));
+  params.set("longitude", spots.map(function(spot) { return spot.marineLon; }).join(","));
+  params.set("timezone", "Europe/Rome");
+  params.set("forecast_days", "2");
+  params.set("hourly", "wave_height,wave_direction,wave_period");
+  return "https://marine-api.open-meteo.com/v1/marine?" + params.toString();
+}
+
 async function fetchJson(url, preserveArray) {
   var controller = new AbortController();
   var timeout = setTimeout(function() { controller.abort(); }, 16000);
@@ -340,6 +375,72 @@ function splitCombinedData(payload, models, fields) {
     return [{ meta:models[0], data:combined }];
   }
   return parsed;
+}
+
+function hourlyValue(data, key, index) {
+  if (!data || !data.hourly || !Array.isArray(data.hourly[key])) return null;
+  var value = data.hourly[key][index];
+  return validNumber(value) ? value : null;
+}
+
+function summarizeQuickSpot(spot, weather, marine) {
+  if (!weather || !weather.hourly || !Array.isArray(weather.hourly.time)) return null;
+  var today = romeHourKey().slice(0, 10);
+  var points = weather.hourly.time.map(function(time, index) {
+    if (dateFromTime(time) !== today) return null;
+    var precipitation = hourlyValue(weather, "precipitation", index);
+    var probability = hourlyValue(weather, "precipitation_probability", index);
+    if (!validNumber(probability) && validNumber(precipitation)) probability = clamp(precipitation * 75, 0, 100);
+    var wave = marine ? nearestValue(marine, time, "wave_height", 2.2) : null;
+    return {
+      time:time,
+      temperature:hourlyValue(weather, "temperature_2m", index),
+      apparentTemperature:hourlyValue(weather, "apparent_temperature", index),
+      wind:hourlyValue(weather, "wind_speed_10m", index),
+      windDirection:hourlyValue(weather, "wind_direction_10m", index),
+      gust:hourlyValue(weather, "wind_gusts_10m", index),
+      cloud:hourlyValue(weather, "cloud_cover", index),
+      precipitation:precipitation,
+      rainProbability:probability,
+      weatherCode:hourlyValue(weather, "weather_code", index),
+      wave:wave,
+      waveDirection:marine ? nearestValue(marine, time, "wave_direction", 2.2) : null,
+      wavePeriod:marine ? nearestValue(marine, time, "wave_period", 2.2) : null,
+      seaTemperature:null,
+      confidence:70,
+      windSpread:0,
+      tempSpread:0,
+      modelCount:1,
+      marineCount:validNumber(wave) ? 1 : 0
+    };
+  }).filter(Boolean);
+  if (!points.length) return null;
+  var beachHours = points.filter(function(point) {
+    var hour = hourFromTime(point.time);
+    return hour >= 7 && hour <= 21;
+  });
+  var best = bestBeachWindow(beachHours);
+  var summary = averagePoints(best.points);
+  var firstHour = best.points.length ? hourFromTime(best.points[0].time) : 9;
+  var lastHour = best.points.length ? hourFromTime(best.points[best.points.length - 1].time) + 1 : 12;
+  return {
+    spot:spot,
+    score:Math.round(best.score || 0),
+    summary:summary,
+    window:String(firstHour).padStart(2, "0") + ":00–" + String(lastHour).padStart(2, "0") + ":00"
+  };
+}
+
+async function rankBeachSpots(spots) {
+  var raw = await Promise.all([
+    fetchJson(batchWeatherUrl(spots), true),
+    fetchJson(batchMarineUrl(spots), true).catch(function() { return []; })
+  ]);
+  var weatherList = Array.isArray(raw[0]) ? raw[0] : [raw[0]];
+  var marineList = Array.isArray(raw[1]) ? raw[1] : raw[1] ? [raw[1]] : [];
+  return spots.map(function(spot, index) {
+    return summarizeQuickSpot(spot, weatherList[index], marineList[index] || null);
+  }).filter(Boolean);
 }
 
 async function loadWeatherModel(spot, meta) {
@@ -740,6 +841,234 @@ function renderWebcams() {
   }
 }
 
+function renderFavorites() {
+  var button = $("favoriteBtn");
+  button.disabled = !state.spot;
+  var selected = Boolean(state.spot && state.favorites.indexOf(state.spot.id) !== -1);
+  button.textContent = selected ? "★" : "☆";
+  button.setAttribute("aria-pressed", String(selected));
+  button.setAttribute("aria-label", selected ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti");
+
+  var container = $("favoriteList");
+  container.replaceChildren();
+  if (!state.favorites.length) {
+    container.hidden = true;
+    return;
+  }
+  state.favorites.forEach(function(spotId) {
+    var spot = SPOTS.find(function(item) { return item.id === spotId; });
+    if (!spot) return;
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "favorite-chip";
+    chip.dataset.spotId = spot.id;
+    chip.textContent = spot.name;
+    container.appendChild(chip);
+  });
+  var clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "favorites-clear";
+  clear.dataset.clearFavorites = "true";
+  clear.textContent = "Svuota preferiti";
+  container.appendChild(clear);
+  container.hidden = false;
+}
+
+function saveFavorites() {
+  try {
+    if (state.favorites.length) localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
+    else localStorage.removeItem(FAVORITES_KEY);
+  } catch (error) {}
+  renderFavorites();
+}
+
+function loadFavorites() {
+  try {
+    var parsed = JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]");
+    state.favorites = Array.isArray(parsed) ? parsed.filter(function(spotId) {
+      return SPOTS.some(function(spot) { return spot.id === spotId; });
+    }) : [];
+  } catch (error) {
+    state.favorites = [];
+  }
+  renderFavorites();
+}
+
+function renderRegionalRanking(items) {
+  var container = $("coastCompare");
+  container.replaceChildren();
+  var coasts = ["Adriatico","Ionio"].map(function(coast) {
+    var ranked = items.filter(function(item) { return item.spot.coast === coast; }).sort(function(a, b) {
+      return b.score - a.score;
+    });
+    return {
+      name:coast,
+      score:Math.round(mean(ranked.slice(0, 3).map(function(item) { return item.score; })) || 0),
+      best:ranked[0]
+    };
+  }).filter(function(coast) { return coast.best; });
+  var bestScore = Math.max.apply(null, coasts.map(function(coast) { return coast.score; }));
+
+  coasts.forEach(function(coast) {
+    var card = document.createElement("article");
+    card.className = "coast-card" + (coast.score === bestScore ? " recommended" : "");
+    var top = document.createElement("div");
+    top.className = "coast-card-top";
+    var badge = document.createElement("span");
+    badge.textContent = coast.score === bestScore ? "CONSIGLIATO OGGI" : "ALTERNATIVA";
+    var score = document.createElement("strong");
+    score.textContent = coast.score + "/100";
+    top.append(badge, score);
+    var title = document.createElement("h4");
+    title.textContent = coast.name;
+    var detail = document.createElement("p");
+    detail.textContent = "Scelta migliore: " + coast.best.spot.name + " · " + coast.best.window;
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "feature-spot-button";
+    button.dataset.spotId = coast.best.spot.id;
+    button.textContent = "Vedi " + coast.best.spot.name;
+    card.append(top, title, detail, button);
+    container.appendChild(card);
+  });
+}
+
+async function loadRegionalRanking() {
+  if (state.regionalInFlight) return;
+  if (state.regionalRanking && Date.now() - state.regionalFetchedAt < REGIONAL_CACHE_TTL_MS) {
+    renderRegionalRanking(state.regionalRanking);
+    return;
+  }
+  state.regionalInFlight = true;
+  $("coastCompare").innerHTML = '<p class="panel-status">Confronto automatico in corso…</p>';
+  try {
+    var spots = REGIONAL_SPOT_IDS.map(function(id) {
+      return SPOTS.find(function(spot) { return spot.id === id; });
+    }).filter(Boolean);
+    state.regionalRanking = await rankBeachSpots(spots);
+    state.regionalFetchedAt = Date.now();
+    if (!state.regionalRanking.length) throw new Error("Confronto non disponibile");
+    renderRegionalRanking(state.regionalRanking);
+  } catch (error) {
+    $("coastCompare").innerHTML = '<p class="panel-status">Confronto temporaneamente non disponibile. Le previsioni della località selezionata restano attive.</p>';
+  } finally {
+    state.regionalInFlight = false;
+  }
+}
+
+function renderNearMeResults(items) {
+  var container = $("nearMeResults");
+  container.replaceChildren();
+  items.slice(0, 3).forEach(function(item) {
+    var card = document.createElement("article");
+    card.className = "near-result";
+    var title = document.createElement("strong");
+    title.textContent = item.spot.name + " · " + item.score + "/100";
+    var detail = document.createElement("span");
+    detail.textContent = item.distance.toFixed(1).replace(".", ",") + " km · meglio " + item.window;
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "feature-spot-button";
+    button.dataset.spotId = item.spot.id;
+    button.textContent = "Apri";
+    card.append(title, detail, button);
+    container.appendChild(card);
+  });
+}
+
+function locateBestBeach() {
+  if (state.nearMeInFlight) return;
+  if (!("geolocation" in navigator)) {
+    $("nearMeStatus").textContent = "La geolocalizzazione non è disponibile in questo browser.";
+    return;
+  }
+  state.nearMeInFlight = true;
+  $("nearMeBtn").disabled = true;
+  $("nearMeBtn").textContent = "Cerco le spiagge vicine…";
+  $("nearMeStatus").textContent = "Il browser potrebbe chiederti il permesso. La posizione non viene conservata.";
+  $("nearMeResults").replaceChildren();
+
+  navigator.geolocation.getCurrentPosition(async function(position) {
+    var userPosition = { lat:position.coords.latitude, lon:position.coords.longitude };
+    var nearest = SPOTS.map(function(spot) {
+      return { spot:spot, distance:distanceKm(userPosition, spot) };
+    }).sort(function(a, b) {
+      return a.distance - b.distance;
+    });
+    if (!nearest.length || nearest[0].distance > 150) {
+      $("nearMeStatus").textContent = "La posizione risulta fuori dall’area del Salento coperta da MareVero.";
+      state.nearMeInFlight = false;
+      $("nearMeBtn").disabled = false;
+      $("nearMeBtn").textContent = "Usa la mia posizione";
+      return;
+    }
+    try {
+      var candidates = nearest.slice(0, 8);
+      var ranked = await rankBeachSpots(candidates.map(function(item) { return item.spot; }));
+      ranked.forEach(function(item) {
+        var match = candidates.find(function(candidate) { return candidate.spot.id === item.spot.id; });
+        item.distance = match ? match.distance : 0;
+        item.nearScore = item.score - Math.min(item.distance, 60) * 0.3;
+      });
+      ranked.sort(function(a, b) { return b.nearScore - a.nearScore; });
+      $("nearMeStatus").textContent = "Posizione elaborata nel browser. Confrontate le 8 spiagge più vicine.";
+      renderNearMeResults(ranked);
+    } catch (error) {
+      $("nearMeStatus").textContent = "Non riesco a confrontare le spiagge vicine in questo momento. Riprova tra poco.";
+    } finally {
+      state.nearMeInFlight = false;
+      $("nearMeBtn").disabled = false;
+      $("nearMeBtn").textContent = "Aggiorna dalla mia posizione";
+    }
+  }, function(error) {
+    var message = error && error.code === 1 ?
+      "Permesso non concesso. Puoi abilitarlo dalle impostazioni del browser e riprovare." :
+      "Posizione non disponibile. Controlla il segnale e riprova.";
+    $("nearMeStatus").textContent = message;
+    state.nearMeInFlight = false;
+    $("nearMeBtn").disabled = false;
+    $("nearMeBtn").textContent = "Usa la mia posizione";
+  }, {
+    enableHighAccuracy:false,
+    timeout:12000,
+    maximumAge:10 * 60 * 1000
+  });
+}
+
+function renderRiskSignal(day) {
+  var rows = day && day.hours ? day.hours : [];
+  var maximum = function(key) {
+    var values = rows.map(function(point) { return point[key]; }).filter(validNumber);
+    return values.length ? Math.max.apply(null, values) : null;
+  };
+  var storm = rows.some(function(point) { return validNumber(point.weatherCode) && point.weatherCode >= 95; });
+  var rain = maximum("rainProbability");
+  var gust = maximum("gust");
+  var wind = maximum("wind");
+  var wave = maximum("wave");
+  var severe = storm || (validNumber(gust) && gust >= 55) || (validNumber(wave) && wave >= 2.2);
+  var watch = severe || (validNumber(rain) && rain >= 60) || (validNumber(gust) && gust >= 42) ||
+    (validNumber(wind) && wind >= 30) || (validNumber(wave) && wave >= 1.4);
+  var signal = $("riskSignal");
+  signal.className = "risk-signal" + (severe ? " alert" : watch ? " watch" : "");
+  signal.replaceChildren();
+  var title = document.createElement("strong");
+  title.textContent = severe ? "Condizioni potenzialmente critiche" :
+    watch ? "Condizioni da controllare" : "Nessun segnale evidente nel consenso";
+  var detail = document.createElement("p");
+  detail.textContent = severe || watch ?
+    "Apri radar e allerte ufficiali prima di partire. Lo screening automatico non è un livello di allerta." :
+    "Lo screening non rileva soglie prudenziali superate, ma devi comunque verificare le fonti ufficiali.";
+  signal.append(title, detail);
+}
+
+function openFeatureSpot(spotId) {
+  if (!SPOTS.some(function(spot) { return spot.id === spotId; })) return;
+  $("spotSelect").value = spotId;
+  loadSpot(spotId, { force:false });
+  document.querySelector(".location-bar").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
 function renderDays() {
   $("dayCards").innerHTML = state.days.slice(0, 5).map(function(day, index) {
     var verdict = verdictFor(day);
@@ -813,6 +1142,7 @@ function renderAll() {
   renderHero(heroDay, current);
   renderHeroDays();
   renderWebcams();
+  renderRiskSignal(heroDay);
   renderDays();
   renderHourly();
   renderModels();
@@ -844,7 +1174,9 @@ function applySpotSnapshot(spot, snapshot, fromCache) {
     showError("Alcune fonti stanno aggiornando i dati. Il consenso usa solo i modelli disponibili in questo momento.");
   }
   $("spotSelect").value = spot.id;
+  renderFavorites();
   updateSpotUrl(spot);
+  loadRegionalRanking();
 }
 
 async function loadSpot(spotId, options) {
@@ -913,6 +1245,30 @@ function bindEvents() {
   $("spotSelect").addEventListener("change", function(event) {
     loadSpot(event.target.value, { force:false });
   });
+  $("favoriteBtn").addEventListener("click", function() {
+    if (!state.spot) return;
+    var index = state.favorites.indexOf(state.spot.id);
+    if (index >= 0) state.favorites.splice(index, 1);
+    else state.favorites.push(state.spot.id);
+    saveFavorites();
+  });
+  $("favoriteList").addEventListener("click", function(event) {
+    var clear = event.target.closest("[data-clear-favorites]");
+    if (clear) {
+      state.favorites = [];
+      saveFavorites();
+      return;
+    }
+    var chip = event.target.closest("[data-spot-id]");
+    if (chip) openFeatureSpot(chip.dataset.spotId);
+  });
+  ["coastCompare","nearMeResults"].forEach(function(id) {
+    $(id).addEventListener("click", function(event) {
+      var button = event.target.closest("[data-spot-id]");
+      if (button) openFeatureSpot(button.dataset.spotId);
+    });
+  });
+  $("nearMeBtn").addEventListener("click", locateBestBeach);
   $("refreshBtn").addEventListener("click", function() {
     loadSpot(state.spot ? state.spot.id : $("spotSelect").value, { force:true });
   });
@@ -994,6 +1350,7 @@ function init() {
   var requested = new URLSearchParams(window.location.search).get("spot");
   var initial = SPOTS.some(function(spot) { return spot.id === requested; }) ? requested : "porto-cesareo";
   $("spotSelect").value = initial;
+  loadFavorites();
   bindEvents();
   setupLegalDialog();
   setupInstall();
