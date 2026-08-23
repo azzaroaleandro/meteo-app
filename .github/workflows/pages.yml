@@ -1,14 +1,11 @@
-name: Validate and deploy MareVero
+name: Validate, deploy and verify MareVero
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - deployment-status.json
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -16,6 +13,8 @@ concurrency:
 
 jobs:
   validate:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,6 +28,10 @@ jobs:
 
   deploy:
     needs: validate
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -45,3 +48,22 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    needs: deploy
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Verify public app
+        run: curl --fail --silent --show-error --retry 12 --retry-delay 10 --retry-all-errors https://azzaroaleandro.github.io/meteo-app/ > /dev/null
+      - name: Record successful deployment
+        run: |
+          node -e "require('fs').writeFileSync('deployment-status.json', JSON.stringify({status:'live',url:'https://azzaroaleandro.github.io/meteo-app/',verified_at:new Date().toISOString(),commit:process.env.GITHUB_SHA},null,2)+'\n')"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deployment-status.json
+          git commit -m "Record successful Pages deployment [skip ci]"
+          git push
