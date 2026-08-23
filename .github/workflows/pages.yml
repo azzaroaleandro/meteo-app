@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - deployment-status.json
+      - ci-diagnostics.json
   workflow_dispatch:
 
 concurrency:
@@ -66,4 +67,26 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add deployment-status.json
           git commit -m "Record successful Pages deployment [skip ci]"
+          git push
+
+  report-failure:
+    needs: [validate, deploy]
+    if: ${{ always() && (needs.validate.result != 'success' || needs.deploy.result != 'success') }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    env:
+      VALIDATE_RESULT: ${{ needs.validate.result }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Build diagnostic report
+        run: node -e "const fs=require('fs'),cp=require('child_process');const js=cp.spawnSync(process.execPath,['--check','app.js'],{encoding:'utf8'});fs.writeFileSync('ci-diagnostics.json',JSON.stringify({status:'failed',validate:process.env.VALIDATE_RESULT,deploy:process.env.DEPLOY_RESULT,javascript:{exit_code:js.status,output:(js.stderr||js.stdout||'syntax ok').trim()},commit:process.env.GITHUB_SHA,recorded_at:new Date().toISOString()},null,2)+'\n')"
+      - name: Publish diagnostic report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ci-diagnostics.json
+          git commit -m "Record cloud deployment diagnostics [skip ci]"
           git push
