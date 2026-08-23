@@ -307,12 +307,13 @@ function sstUrl(spot) {
   return "https://marine-api.open-meteo.com/v1/marine?" + params.toString();
 }
 
-function batchWeatherUrl(spots) {
+function batchWeatherUrl(spots, forecastDays) {
+  var horizon = Math.max(1, Math.min(3, forecastDays || 1));
   var params = new URLSearchParams();
   params.set("latitude", spots.map(function(spot) { return spot.lat; }).join(","));
   params.set("longitude", spots.map(function(spot) { return spot.lon; }).join(","));
   params.set("timezone", "Europe/Rome");
-  params.set("forecast_days", "2");
+  params.set("forecast_days", String(horizon));
   params.set("wind_speed_unit", "kmh");
   params.set("hourly", [
     "temperature_2m","apparent_temperature","precipitation","precipitation_probability",
@@ -321,12 +322,13 @@ function batchWeatherUrl(spots) {
   return "https://api.open-meteo.com/v1/forecast?" + params.toString();
 }
 
-function batchMarineUrl(spots) {
+function batchMarineUrl(spots, forecastDays) {
+  var horizon = Math.max(1, Math.min(3, forecastDays || 1));
   var params = new URLSearchParams();
   params.set("latitude", spots.map(function(spot) { return spot.marineLat; }).join(","));
   params.set("longitude", spots.map(function(spot) { return spot.marineLon; }).join(","));
   params.set("timezone", "Europe/Rome");
-  params.set("forecast_days", "2");
+  params.set("forecast_days", String(horizon));
   params.set("hourly", "wave_height,wave_direction,wave_period");
   return "https://marine-api.open-meteo.com/v1/marine?" + params.toString();
 }
@@ -383,11 +385,20 @@ function hourlyValue(data, key, index) {
   return validNumber(value) ? value : null;
 }
 
-function summarizeQuickSpot(spot, weather, marine) {
+function summarizeQuickSpot(spot, weather, marine, forecastDays) {
   if (!weather || !weather.hourly || !Array.isArray(weather.hourly.time)) return null;
   var today = romeHourKey().slice(0, 10);
+  var horizon = Math.max(1, Math.min(3, forecastDays || 1));
+  var forecastDates = [];
+  weather.hourly.time.forEach(function(time) {
+    var date = dateFromTime(time);
+    if (date >= today && forecastDates.indexOf(date) === -1 && forecastDates.length < horizon) {
+      forecastDates.push(date);
+    }
+  });
+
   var points = weather.hourly.time.map(function(time, index) {
-    if (dateFromTime(time) !== today) return null;
+    if (forecastDates.indexOf(dateFromTime(time)) === -1) return null;
     var precipitation = hourlyValue(weather, "precipitation", index);
     var probability = hourlyValue(weather, "precipitation_probability", index);
     if (!validNumber(probability) && validNumber(precipitation)) probability = clamp(precipitation * 75, 0, 100);
@@ -415,31 +426,51 @@ function summarizeQuickSpot(spot, weather, marine) {
     };
   }).filter(Boolean);
   if (!points.length) return null;
-  var beachHours = points.filter(function(point) {
-    var hour = hourFromTime(point.time);
-    return hour >= 7 && hour <= 21;
+
+  var days = forecastDates.map(function(date) {
+    var beachHours = points.filter(function(point) {
+      var hour = hourFromTime(point.time);
+      return dateFromTime(point.time) === date && hour >= 7 && hour <= 21;
+    });
+    if (!beachHours.length) return null;
+    var best = bestBeachWindow(beachHours);
+    var firstHour = best.points.length ? hourFromTime(best.points[0].time) : 9;
+    var lastHour = best.points.length ? hourFromTime(best.points[best.points.length - 1].time) + 1 : 12;
+    return {
+      date:date,
+      score:Math.round(best.score || 0),
+      summary:averagePoints(best.points),
+      bestPoints:best.points,
+      window:String(firstHour).padStart(2, "0") + ":00–" + String(lastHour).padStart(2, "0") + ":00"
+    };
+  }).filter(Boolean);
+  if (!days.length) return null;
+
+  var strongestDay = days.slice().sort(function(a, b) { return b.score - a.score; })[0];
+  var allBestPoints = [];
+  days.forEach(function(day) {
+    allBestPoints = allBestPoints.concat(day.bestPoints);
   });
-  var best = bestBeachWindow(beachHours);
-  var summary = averagePoints(best.points);
-  var firstHour = best.points.length ? hourFromTime(best.points[0].time) : 9;
-  var lastHour = best.points.length ? hourFromTime(best.points[best.points.length - 1].time) + 1 : 12;
   return {
     spot:spot,
-    score:Math.round(best.score || 0),
-    summary:summary,
-    window:String(firstHour).padStart(2, "0") + ":00–" + String(lastHour).padStart(2, "0") + ":00"
+    score:Math.round(mean(days.map(function(day) { return day.score; })) || 0),
+    summary:averagePoints(allBestPoints),
+    window:strongestDay.window,
+    bestDate:strongestDay.date,
+    days:days
   };
 }
 
-async function rankBeachSpots(spots) {
+async function rankBeachSpots(spots, forecastDays) {
+  var horizon = Math.max(1, Math.min(3, forecastDays || 1));
   var raw = await Promise.all([
-    fetchJson(batchWeatherUrl(spots), true),
-    fetchJson(batchMarineUrl(spots), true).catch(function() { return []; })
+    fetchJson(batchWeatherUrl(spots, horizon), true),
+    fetchJson(batchMarineUrl(spots, horizon), true).catch(function() { return []; })
   ]);
   var weatherList = Array.isArray(raw[0]) ? raw[0] : [raw[0]];
   var marineList = Array.isArray(raw[1]) ? raw[1] : raw[1] ? [raw[1]] : [];
   return spots.map(function(spot, index) {
-    return summarizeQuickSpot(spot, weatherList[index], marineList[index] || null);
+    return summarizeQuickSpot(spot, weatherList[index], marineList[index] || null, horizon);
   }).filter(Boolean);
 }
 
@@ -915,14 +946,16 @@ function renderRegionalRanking(items) {
     var top = document.createElement("div");
     top.className = "coast-card-top";
     var badge = document.createElement("span");
-    badge.textContent = coast.score === bestScore ? "CONSIGLIATO OGGI" : "ALTERNATIVA";
+    var horizon = coast.best.days ? coast.best.days.length : 1;
+    badge.textContent = coast.score === bestScore ? "CONSIGLIATO · " + horizon + " GIORNI" : "ALTERNATIVA · " + horizon + " GIORNI";
     var score = document.createElement("strong");
     score.textContent = coast.score + "/100";
     top.append(badge, score);
     var title = document.createElement("h4");
     title.textContent = coast.name;
     var detail = document.createElement("p");
-    detail.textContent = "Scelta migliore: " + coast.best.spot.name + " · " + coast.best.window;
+    var bestDayLabel = coast.best.bestDate ? formatDay(coast.best.bestDate, { weekday:"long", day:"numeric" }) : "oggi";
+    detail.textContent = "Più costante: " + coast.best.spot.name + " · giornata migliore " + bestDayLabel + ", " + coast.best.window;
     var button = document.createElement("button");
     button.type = "button";
     button.className = "feature-spot-button";
@@ -940,12 +973,12 @@ async function loadRegionalRanking() {
     return;
   }
   state.regionalInFlight = true;
-  $("coastCompare").innerHTML = '<p class="panel-status">Confronto automatico in corso…</p>';
+  $("coastCompare").innerHTML = '<p class="panel-status">Confronto sui prossimi tre giorni in corso…</p>';
   try {
     var spots = REGIONAL_SPOT_IDS.map(function(id) {
       return SPOTS.find(function(spot) { return spot.id === id; });
     }).filter(Boolean);
-    state.regionalRanking = await rankBeachSpots(spots);
+    state.regionalRanking = await rankBeachSpots(spots, 3);
     state.regionalFetchedAt = Date.now();
     if (!state.regionalRanking.length) throw new Error("Confronto non disponibile");
     renderRegionalRanking(state.regionalRanking);
