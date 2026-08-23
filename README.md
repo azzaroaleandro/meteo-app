@@ -19,3 +19,7 @@ Punta Prosciutto, Torre Lapillo, Porto Cesareo, Gallipoli, Pescoluse, Santa Mari
 Il workflow GitHub Actions pubblica automaticamente il sito statico su GitHub Pages a ogni aggiornamento del branch `main`.
 
 La previsione è pensata per organizzare una giornata in spiaggia. Non sostituisce bollettini ufficiali, avvisi di protezione civile o strumenti per la navigazione.
+
+## App online
+
+[MareVero — Salento](https://azzaroaleandro.github.io/meteo-app/)
