@@ -1,16 +1,89 @@
 "use strict";
 
+function makeSpot(id, name, coast, zone, lat, lon, seaSide) {
+  var marineLat = lat;
+  var marineLon = lon;
+  var offset = 0.034;
+  if (seaSide === "E") marineLon += offset;
+  if (seaSide === "W") marineLon -= offset;
+  if (seaSide === "S") marineLat -= offset;
+  if (seaSide === "SE") {
+    marineLat -= offset * 0.7;
+    marineLon += offset * 0.7;
+  }
+  if (seaSide === "SW") {
+    marineLat -= offset * 0.7;
+    marineLon -= offset * 0.7;
+  }
+  return {
+    id:id,
+    name:name,
+    coast:coast,
+    zone:zone,
+    lat:lat,
+    lon:lon,
+    marineLat:Number(marineLat.toFixed(4)),
+    marineLon:Number(marineLon.toFixed(4))
+  };
+}
+
 var SPOTS = [
-  { id:"punta-prosciutto", name:"Punta Prosciutto", coast:"Ionio", lat:40.2969, lon:17.7681, marineLat:40.2969, marineLon:17.7350 },
-  { id:"torre-lapillo", name:"Torre Lapillo", coast:"Ionio", lat:40.2873, lon:17.8527, marineLat:40.2873, marineLon:17.8200 },
-  { id:"porto-cesareo", name:"Porto Cesareo", coast:"Ionio", lat:40.2595, lon:17.8984, marineLat:40.2595, marineLon:17.8640 },
-  { id:"gallipoli", name:"Gallipoli", coast:"Ionio", lat:40.0559, lon:17.9925, marineLat:40.0559, marineLon:17.9580 },
-  { id:"pescoluse", name:"Pescoluse", coast:"Ionio", lat:39.8378, lon:18.2561, marineLat:39.8130, marineLon:18.2561 },
-  { id:"santa-maria-leuca", name:"Santa Maria di Leuca", coast:"Capo", lat:39.7968, lon:18.3589, marineLat:39.7650, marineLon:18.3589 },
-  { id:"castro", name:"Castro", coast:"Adriatico", lat:40.0073, lon:18.4256, marineLat:40.0073, marineLon:18.4600 },
-  { id:"otranto", name:"Otranto", coast:"Adriatico", lat:40.1480, lon:18.4869, marineLat:40.1480, marineLon:18.5210 },
-  { id:"torre-orso", name:"Torre dell'Orso", coast:"Adriatico", lat:40.2734, lon:18.4265, marineLat:40.2734, marineLon:18.4600 },
-  { id:"san-foca", name:"San Foca", coast:"Adriatico", lat:40.3034, lon:18.4037, marineLat:40.3034, marineLon:18.4380 }
+  makeSpot("casalabate", "Casalabate", "Adriatico", "Lecce e nord Adriatico", 40.5250, 18.1210, "E"),
+  makeSpot("torre-rinalda", "Torre Rinalda", "Adriatico", "Lecce e nord Adriatico", 40.4900, 18.1530, "E"),
+  makeSpot("spiaggiabella", "Spiaggiabella", "Adriatico", "Lecce e nord Adriatico", 40.4730, 18.1790, "E"),
+  makeSpot("torre-chianca", "Torre Chianca", "Adriatico", "Lecce e nord Adriatico", 40.4560, 18.2070, "E"),
+  makeSpot("frigole", "Frigole", "Adriatico", "Lecce e nord Adriatico", 40.4270, 18.2440, "E"),
+  makeSpot("san-cataldo", "San Cataldo", "Adriatico", "Lecce e nord Adriatico", 40.3780, 18.3060, "E"),
+  makeSpot("torre-specchia", "Torre Specchia Ruggeri", "Adriatico", "Lecce e nord Adriatico", 40.3310, 18.3840, "E"),
+
+  makeSpot("san-foca", "San Foca", "Adriatico", "Costa adriatica", 40.3034, 18.4037, "E"),
+  makeSpot("roca-vecchia", "Roca Vecchia", "Adriatico", "Costa adriatica", 40.2850, 18.4230, "E"),
+  makeSpot("torre-orso", "Torre dell'Orso", "Adriatico", "Costa adriatica", 40.2734, 18.4265, "E"),
+  makeSpot("sant-andrea", "Sant'Andrea", "Adriatico", "Costa adriatica", 40.2580, 18.4460, "E"),
+  makeSpot("conca-specchiulla", "Conca Specchiulla", "Adriatico", "Costa adriatica", 40.2400, 18.4560, "E"),
+  makeSpot("frassanito", "Frassanito", "Adriatico", "Costa adriatica", 40.2260, 18.4620, "E"),
+  makeSpot("alimini", "Alimini", "Adriatico", "Costa adriatica", 40.2080, 18.4580, "E"),
+  makeSpot("baia-turchi", "Baia dei Turchi", "Adriatico", "Costa adriatica", 40.1810, 18.4720, "E"),
+  makeSpot("otranto", "Otranto", "Adriatico", "Costa adriatica", 40.1480, 18.4869, "E"),
+  makeSpot("porto-badisco", "Porto Badisco", "Adriatico", "Costa adriatica", 40.0790, 18.4840, "E"),
+  makeSpot("santa-cesarea", "Santa Cesarea Terme", "Adriatico", "Costa adriatica", 40.0360, 18.4560, "E"),
+  makeSpot("porto-miggiano", "Porto Miggiano", "Adriatico", "Costa adriatica", 40.0250, 18.4530, "E"),
+  makeSpot("castro", "Castro", "Adriatico", "Costa adriatica", 40.0073, 18.4256, "E"),
+  makeSpot("marina-marittima", "Marina di Marittima", "Adriatico", "Costa adriatica", 39.9850, 18.4030, "E"),
+  makeSpot("acquaviva", "Cala dell'Acquaviva", "Adriatico", "Costa adriatica", 39.9780, 18.3950, "E"),
+  makeSpot("tricase-porto", "Tricase Porto", "Adriatico", "Costa adriatica", 39.9310, 18.3940, "E"),
+  makeSpot("marina-serra", "Marina Serra", "Adriatico", "Costa adriatica", 39.9100, 18.3900, "E"),
+  makeSpot("novaglie", "Marina di Novaglie", "Adriatico", "Costa adriatica", 39.8560, 18.3920, "E"),
+
+  makeSpot("ciolo", "Ciolo", "Capo", "Capo di Leuca", 39.8430, 18.3870, "SE"),
+  makeSpot("santa-maria-leuca", "Santa Maria di Leuca", "Capo", "Capo di Leuca", 39.7968, 18.3589, "S"),
+  makeSpot("felloniche", "Felloniche", "Ionio", "Capo di Leuca", 39.8080, 18.3230, "SW"),
+  makeSpot("san-gregorio", "San Gregorio", "Ionio", "Capo di Leuca", 39.8170, 18.3100, "W"),
+  makeSpot("torre-vado", "Torre Vado", "Ionio", "Capo di Leuca", 39.8350, 18.2750, "W"),
+
+  makeSpot("pescoluse", "Pescoluse", "Ionio", "Costa ionica", 39.8378, 18.2561, "W"),
+  makeSpot("torre-pali", "Torre Pali", "Ionio", "Costa ionica", 39.8430, 18.2080, "W"),
+  makeSpot("lido-marini", "Lido Marini", "Ionio", "Costa ionica", 39.8570, 18.1830, "W"),
+  makeSpot("torre-mozza", "Torre Mozza", "Ionio", "Costa ionica", 39.8700, 18.1470, "W"),
+  makeSpot("fontanelle", "Fontanelle", "Ionio", "Costa ionica", 39.8850, 18.1260, "W"),
+  makeSpot("torre-san-giovanni", "Torre San Giovanni", "Ionio", "Costa ionica", 39.8910, 18.1140, "W"),
+  makeSpot("posto-rosso", "Posto Rosso", "Ionio", "Costa ionica", 39.9290, 18.0640, "W"),
+  makeSpot("capilungo", "Capilungo", "Ionio", "Costa ionica", 39.9470, 18.0520, "W"),
+  makeSpot("torre-suda", "Torre Suda", "Ionio", "Costa ionica", 39.9680, 18.0390, "W"),
+  makeSpot("mancaversa", "Marina di Mancaversa", "Ionio", "Costa ionica", 39.9930, 18.0140, "W"),
+  makeSpot("punta-pizzo", "Punta Pizzo", "Ionio", "Costa ionica", 40.0100, 17.9990, "W"),
+  makeSpot("baia-verde", "Baia Verde", "Ionio", "Costa ionica", 40.0370, 18.0180, "W"),
+  makeSpot("gallipoli", "Gallipoli", "Ionio", "Costa ionica", 40.0559, 17.9925, "W"),
+  makeSpot("rivabella", "Rivabella", "Ionio", "Costa ionica", 40.0830, 18.0060, "W"),
+  makeSpot("lido-conchiglie", "Lido Conchiglie", "Ionio", "Costa ionica", 40.1050, 18.0170, "W"),
+  makeSpot("santa-maria-bagno", "Santa Maria al Bagno", "Ionio", "Costa ionica", 40.1260, 17.9940, "W"),
+  makeSpot("santa-caterina", "Santa Caterina", "Ionio", "Costa ionica", 40.1390, 17.9830, "W"),
+  makeSpot("porto-selvaggio", "Porto Selvaggio", "Ionio", "Costa ionica", 40.1500, 17.9680, "W"),
+  makeSpot("torre-uluzzo", "Torre Uluzzo", "Ionio", "Costa ionica", 40.1630, 17.9570, "W"),
+  makeSpot("sant-isidoro", "Sant'Isidoro", "Ionio", "Costa ionica", 40.2190, 17.9260, "W"),
+  makeSpot("porto-cesareo", "Porto Cesareo", "Ionio", "Costa ionica", 40.2595, 17.8984, "W"),
+  makeSpot("torre-lapillo", "Torre Lapillo", "Ionio", "Costa ionica", 40.2873, 17.8527, "W"),
+  makeSpot("punta-prosciutto", "Punta Prosciutto", "Ionio", "Costa ionica", 40.2969, 17.7681, "W")
 ];
 
 var WEATHER_MODELS = [
@@ -630,11 +703,21 @@ function setupInstall() {
 }
 
 function init() {
+  var groupedSpots = {};
   SPOTS.forEach(function(spot) {
-    var option = document.createElement("option");
-    option.value = spot.id;
-    option.textContent = spot.name + " · " + spot.coast;
-    $("spotSelect").appendChild(option);
+    if (!groupedSpots[spot.zone]) groupedSpots[spot.zone] = [];
+    groupedSpots[spot.zone].push(spot);
+  });
+  Object.keys(groupedSpots).forEach(function(zone) {
+    var group = document.createElement("optgroup");
+    group.label = zone;
+    groupedSpots[zone].forEach(function(spot) {
+      var option = document.createElement("option");
+      option.value = spot.id;
+      option.textContent = spot.name;
+      group.appendChild(option);
+    });
+    $("spotSelect").appendChild(group);
   });
   var requested = new URLSearchParams(window.location.search).get("spot");
   var initial = SPOTS.some(function(spot) { return spot.id === requested; }) ? requested : "porto-cesareo";
