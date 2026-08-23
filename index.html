@@ -33,9 +33,11 @@
         <label for="spotSelect">Dove andiamo?</label>
         <div class="select-row">
           <select id="spotSelect" aria-label="Scegli una spiaggia del Salento"></select>
+          <button id="favoriteBtn" class="favorite-button" type="button" aria-label="Aggiungi ai preferiti" aria-pressed="false" disabled>☆</button>
           <button id="refreshBtn" class="refresh-button" type="button" aria-label="Aggiorna le previsioni">↻</button>
         </div>
         <p id="updatedAt">Confronto dei modelli in corso…</p>
+        <div id="favoriteList" class="favorite-list" aria-label="Località preferite" hidden></div>
       </section>
 
       <div id="errorBanner" class="error-banner" role="alert" hidden></div>
@@ -105,16 +107,31 @@
         </article>
       </section>
 
-      <section class="webcam-section" aria-labelledby="webcamTitle">
+      <section class="beach-finder" aria-labelledby="finderTitle">
         <div class="section-heading">
           <div>
-            <span class="section-kicker">IL MARE ADESSO</span>
-            <h2 id="webcamTitle">Webcam vicino a <span id="webcamSpotName">questa località</span></h2>
+            <span class="section-kicker">DOVE VADO AL MARE OGGI?</span>
+            <h2 id="finderTitle">Ionio o Adriatico?</h2>
           </div>
-          <span class="webcam-external-badge">Link esterni</span>
+          <span class="finder-method">12 località campione · 2 richieste aggregate</span>
         </div>
-        <div id="webcamCards" class="webcam-cards" aria-live="polite"></div>
-        <p class="webcam-note">Le webcam non sono incorporate: si aprono sul sito del gestore soltanto dopo il tuo clic, così MareVero non carica pubblicità, cookie o tracker esterni. Immagini e disponibilità dipendono dal gestore.</p>
+        <div class="finder-layout">
+          <div class="coast-panel">
+            <h3>Confronto automatico delle coste</h3>
+            <p class="panel-intro">Una scansione rapida confronta meteo, vento e onde sulle due coste. È un orientamento, non il consenso completo della singola località.</p>
+            <div id="coastCompare" class="coast-compare" aria-live="polite">
+              <p class="panel-status">Confronto coste in preparazione…</p>
+            </div>
+          </div>
+          <div class="near-me-panel">
+            <span class="section-kicker">BEST BEACH NEAR ME</span>
+            <h3>La scelta migliore vicino a te</h3>
+            <p>Con il tuo permesso, MareVero confronta le spiagge più vicine combinando distanza e condizioni previste. La posizione resta nel browser.</p>
+            <button id="nearMeBtn" class="primary-action" type="button">Usa la mia posizione</button>
+            <p id="nearMeStatus" class="near-me-status" role="status"></p>
+            <div id="nearMeResults" class="near-me-results"></div>
+          </div>
+        </div>
       </section>
 
       <section class="forecast-section" aria-labelledby="forecastTitle">
@@ -140,6 +157,49 @@
           <span id="selectedDayLabel" class="selected-day-label">—</span>
         </div>
         <div id="hourlyTrack" class="hourly-track"></div>
+      </section>
+
+      <section class="webcam-section" aria-labelledby="webcamTitle">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">IL MARE ADESSO</span>
+            <h2 id="webcamTitle">Webcam vicino a <span id="webcamSpotName">questa località</span></h2>
+          </div>
+          <span class="webcam-external-badge">Link esterni</span>
+        </div>
+        <div id="webcamCards" class="webcam-cards" aria-live="polite"></div>
+        <p class="webcam-note">Le webcam non sono incorporate: si aprono sul sito del gestore soltanto dopo il tuo clic, così MareVero non carica pubblicità, cookie o tracker esterni. Immagini e disponibilità dipendono dal gestore.</p>
+      </section>
+
+      <section class="safety-tools" aria-labelledby="safetyToolsTitle">
+        <div class="section-heading">
+          <div>
+            <span class="section-kicker">RADAR E ALLERTE</span>
+            <h2 id="safetyToolsTitle">Controlla prima di partire</h2>
+          </div>
+          <span class="official-badge">Fonti ufficiali</span>
+        </div>
+        <div class="safety-layout">
+          <div id="riskSignal" class="risk-signal" aria-live="polite">
+            <strong>Screening previsionale in corso…</strong>
+            <p>Non è un’allerta ufficiale.</p>
+          </div>
+          <div class="official-links">
+            <a href="https://mappe.protezionecivile.gov.it/it/mappe-e-dashboard-rischi/piattaforma-radar/" target="_blank" rel="noopener noreferrer">
+              <strong>Radar‑DPC ↗</strong>
+              <span>Pioggia, nuvole e fulmini osservati</span>
+            </a>
+            <a href="https://protezionecivile.regione.puglia.it/" target="_blank" rel="noopener noreferrer">
+              <strong>Allerte Puglia ↗</strong>
+              <span>Messaggi regionali in corso di validità</span>
+            </a>
+            <a href="https://www.regione.puglia.it/web/protezionecivile/bollettino-di-criticit%C3%A0" target="_blank" rel="noopener noreferrer">
+              <strong>Bollettino regionale ↗</strong>
+              <span>Criticità previste per oggi e domani</span>
+            </a>
+          </div>
+        </div>
+        <p class="safety-note">Lo screening MareVero usa soltanto soglie prudenziali su temporali, pioggia, vento, raffiche e onde. Non sostituisce livelli di allerta, ordinanze o indicazioni delle autorità.</p>
       </section>
 
       <details class="models-panel">
@@ -208,16 +268,18 @@
 
         <section>
           <h3>Privacy e memoria tecnica</h3>
-          <p>MareVero non crea account, non imposta cookie, non integra pubblicità, analytics, pixel, fingerprinting, geolocalizzazione o strumenti di profilazione. La località scelta compare soltanto nel parametro <code>spot</code> dell’indirizzo; le coordinate predefinite della spiaggia sono inviate direttamente dal browser alle API di Open‑Meteo.</p>
+          <p>MareVero non crea account, non imposta cookie e non integra pubblicità, analytics, pixel, fingerprinting o strumenti di profilazione. La località scelta compare soltanto nel parametro <code>spot</code> dell’indirizzo; le coordinate predefinite delle spiagge sono inviate direttamente dal browser alle API di Open‑Meteo.</p>
+          <p>I preferiti sono una funzione richiesta dall’utente: nel <code>localStorage</code> viene salvato esclusivamente un elenco di identificativi delle località, senza nomi, posizione o dati personali. Restano nel browser finché vengono rimossi dall’utente o cancellando i dati del sito.</p>
+          <p>“Best beach near me” non attiva la geolocalizzazione automaticamente. Soltanto dopo il clic, il browser chiede il permesso: latitudine e longitudine dell’utente sono elaborate localmente per individuare le spiagge vicine, non vengono conservate né inviate a MareVero, GitHub o Open‑Meteo. Alle API vengono richieste solo le coordinate pubbliche e predefinite delle spiagge candidate.</p>
           <p>Open‑Meteo dichiara di poter conservare per finalità tecniche e anti‑abuso indirizzo IP, URL richiesto e coordinate fino a 90 giorni: consulta i suoi <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener noreferrer">Termini e Privacy</a>. Il sito è ospitato da GitHub Pages, che può trattare log tecnici secondo la <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">GitHub Privacy Statement</a>.</p>
-          <p>Il Service Worker usa esclusivamente la Cache Storage del browser per i file statici essenziali, così da migliorare prestazioni e disponibilità offline. Le risposte previsionali sono riutilizzate per non più di 10 minuti e restano soltanto nella memoria volatile della pagina fino alla sua chiusura; non sono scritte in cookie o archivi persistenti. La cache tecnica può essere rimossa cancellando i dati del sito o disinstallando la web app.</p>
-          <p>Le webcam sono semplici collegamenti esterni: MareVero non incorpora video, immagini o script del gestore e non effettua alcuna richiesta verso quei siti prima del clic. Aprendo una webcam si applicano privacy e cookie policy del relativo gestore.</p>
-          <p>Poiché non sono presenti cookie o tecnologie non necessarie, non viene mostrato un banner di consenso. Per segnalazioni: <a href="https://github.com/azzaroaleandro" target="_blank" rel="noopener noreferrer">profilo GitHub del progetto</a>.</p>
+          <p>Il Service Worker usa esclusivamente la Cache Storage del browser per i file statici essenziali, così da migliorare prestazioni e disponibilità offline. Le risposte previsionali sono riutilizzate per non più di 10 minuti e restano soltanto nella memoria volatile della pagina fino alla sua chiusura. La cache tecnica può essere rimossa cancellando i dati del sito o disinstallando la web app.</p>
+          <p>Le webcam, il radar e i bollettini sono semplici collegamenti esterni: MareVero non incorpora video, mappe, immagini o script dei gestori e non effettua richieste verso quei siti prima del clic. Dopo l’apertura si applicano le rispettive privacy e cookie policy.</p>
+          <p>Non viene mostrato un banner perché non sono presenti cookie, tracker o storage pubblicitario; il salvataggio locale degli ID preferiti serve esclusivamente a fornire la funzione esplicitamente richiesta. Per segnalazioni: <a href="https://github.com/azzaroaleandro" target="_blank" rel="noopener noreferrer">profilo GitHub del progetto</a>.</p>
         </section>
 
         <section>
           <h3>Sicurezza ed emergenze</h3>
-          <p>MareVero serve solo a organizzare una giornata in spiaggia. Non è uno strumento nautico, di allerta, protezione civile o soccorso e non sostituisce osservazioni locali, bagnini, ordinanze, bollettini o autorità competenti. Prima di navigare o fare il bagno consulta <a href="https://protezionecivile.puglia.it/" target="_blank" rel="noopener noreferrer">Protezione Civile Puglia</a>, <a href="https://www.guardiacostiera.gov.it/" target="_blank" rel="noopener noreferrer">Guardia Costiera</a> e le autorità locali; in emergenza usa il 112.</p>
+          <p>MareVero serve solo a organizzare una giornata in spiaggia. Non è uno strumento nautico, di allerta, protezione civile o soccorso e non sostituisce osservazioni locali, bagnini, ordinanze, bollettini o autorità competenti. Prima di navigare o fare il bagno consulta <a href="https://protezionecivile.regione.puglia.it/" target="_blank" rel="noopener noreferrer">Protezione Civile Puglia</a>, <a href="https://www.guardiacostiera.gov.it/" target="_blank" rel="noopener noreferrer">Guardia Costiera</a> e le autorità locali; in emergenza usa il 112.</p>
         </section>
 
         <p class="legal-updated">Informativa aggiornata il 24 agosto 2026. Il servizio usa l’accesso gratuito non commerciale di Open‑Meteo e non contiene pubblicità o abbonamenti.</p>
