@@ -75,6 +75,14 @@ select{width:100%;appearance:none;border:1px solid var(--line);border-radius:14p
 .score-ring>div{position:relative;text-align:center}
 .score-ring strong{font-size:54px;line-height:1;font-family:Georgia,"Times New Roman",serif}
 .score-ring span{font-size:12px;color:rgba(255,255,255,.6)}
+.hero-days{position:relative;z-index:2;grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:2px}
+.hero-day-card{min-width:0;padding:14px 16px;border:1px solid rgba(255,255,255,.14);border-radius:15px;background:rgba(255,255,255,.08)}
+.hero-day-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hero-day-top span{font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:900;color:var(--sun)}
+.hero-day-top strong{font-family:Georgia,"Times New Roman",serif;font-size:20px}
+.hero-day-card>p{margin:7px 0 11px;font-size:12px;font-weight:800;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-day-meta{display:flex;flex-wrap:wrap;gap:5px 13px;color:rgba(255,255,255,.64);font-size:10px}
+.hero-day-meta strong{color:white;margin-left:4px}
 .sea-lines{position:absolute;right:-20px;bottom:30px;width:320px;opacity:.13}
 .sea-lines i{display:block;height:18px;border-top:3px solid white;border-radius:50%;transform:skewX(-18deg);margin-top:-4px}
 .sea-lines i:nth-child(2){transform:translateX(45px) skewX(-18deg)}
@@ -84,7 +92,7 @@ select{width:100%;appearance:none;border:1px solid var(--line);border-radius:14p
 .confidence-meter{height:8px;border-radius:99px;background:rgba(8,47,61,.1);overflow:hidden}
 .confidence-meter i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--coral),var(--sun),#2ca776);transition:width .5s ease}
 .confidence-meter .level-0{width:0}.confidence-meter .level-1{width:10%}.confidence-meter .level-2{width:20%}.confidence-meter .level-3{width:30%}.confidence-meter .level-4{width:40%}.confidence-meter .level-5{width:50%}.confidence-meter .level-6{width:60%}.confidence-meter .level-7{width:70%}.confidence-meter .level-8{width:80%}.confidence-meter .level-9{width:90%}.confidence-meter .level-10{width:100%}
-.metrics-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 70px}
+.metrics-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 38px}
 .metric-card{min-height:158px;border-radius:18px;background:rgba(255,255,255,.72);border:1px solid var(--line);padding:18px;display:flex;flex-direction:column;align-items:flex-start}
 .metric-card.warm{background:#fff1cf}
 .metric-card.cool{background:var(--aqua)}
@@ -94,6 +102,19 @@ select{width:100%;appearance:none;border:1px solid var(--line);border-radius:14p
 .metric-icon{font-size:23px}
 .wind-arrow{font-size:25px;line-height:1;transform:rotate(0deg);transition:transform .4s}
 .wind-arrow.dir-0{transform:rotate(0deg)}.wind-arrow.dir-1{transform:rotate(45deg)}.wind-arrow.dir-2{transform:rotate(90deg)}.wind-arrow.dir-3{transform:rotate(135deg)}.wind-arrow.dir-4{transform:rotate(180deg)}.wind-arrow.dir-5{transform:rotate(225deg)}.wind-arrow.dir-6{transform:rotate(270deg)}.wind-arrow.dir-7{transform:rotate(315deg)}
+.webcam-section{margin:0 0 70px;padding:30px;border:1px solid var(--line);border-radius:24px;background:rgba(255,255,255,.58)}
+.webcam-section .section-heading{margin-bottom:16px}
+.webcam-external-badge{padding:7px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:10px;font-weight:850}
+.webcam-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.webcam-card{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:7px 18px;padding:18px;border:1px solid var(--line);border-radius:17px;background:white}
+.webcam-card-copy{min-width:0}
+.webcam-live{display:inline-flex;align-items:center;gap:6px;color:#25835f;font-size:9px;letter-spacing:.14em;font-weight:900}
+.webcam-live:before{content:"";width:7px;height:7px;border-radius:50%;background:#2ca776;box-shadow:0 0 0 4px rgba(44,167,118,.12)}
+.webcam-card h3{margin:7px 0 3px;font-family:Georgia,"Times New Roman",serif;font-size:20px}
+.webcam-card p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
+.webcam-open{grid-column:2;grid-row:1;align-self:center;padding:10px 13px;border-radius:12px;background:var(--ink);color:white;text-decoration:none;font-size:11px;font-weight:850;white-space:nowrap}
+.webcam-provider{display:block;margin-top:7px;color:var(--muted);font-size:9px}
+.webcam-note{margin:14px 2px 0;color:var(--muted);font-size:10px;line-height:1.55}
 .section-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:22px}
 .section-heading h2,.method-card h2{font-family:Georgia,"Times New Roman",serif;font-size:clamp(29px,4vw,44px);letter-spacing:-.045em;line-height:1;margin:0}
 .unit-toggle{display:flex;padding:4px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.6)}
@@ -185,16 +206,24 @@ button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible{
   .location-bar{display:block;padding:20px 0}
   .location-bar label{display:block;margin-bottom:9px}
   .location-bar>p{margin-top:9px}
-  .hero-card{min-height:470px;padding:32px 24px;grid-template-columns:1fr;align-content:start}
+  .hero-card{min-height:0;padding:32px 24px;grid-template-columns:1fr;align-content:start;gap:24px}
   .hero-card h1{font-size:47px}
-  .score-ring{width:128px;height:128px;position:absolute;right:22px;bottom:24px}
+  .score-ring{width:128px;height:128px;position:relative;right:auto;bottom:auto}
   .score-ring:before{inset:9px}
   .score-ring strong{font-size:39px}
+  .hero-days{grid-template-columns:repeat(3,170px);overflow-x:auto;margin:0 -4px;padding:0 4px 5px;scroll-snap-type:x mandatory}
+  .hero-day-card{scroll-snap-align:start}
   .best-window{max-width:175px;margin-top:22px}
   .consensus-strip{display:block;padding:17px}
   .consensus-strip p{margin:8px 0 14px}
-  .metrics-grid{grid-template-columns:repeat(2,1fr);margin-bottom:55px}
+  .metrics-grid{grid-template-columns:repeat(2,1fr);margin-bottom:34px}
   .metric-card{min-height:142px}
+  .webcam-section{margin-bottom:55px;padding:24px 18px}
+  .webcam-section .section-heading{display:block}
+  .webcam-external-badge{display:inline-block;margin-top:10px}
+  .webcam-cards{grid-template-columns:1fr}
+  .webcam-card{grid-template-columns:minmax(0,1fr)}
+  .webcam-open{grid-column:1;grid-row:auto;justify-self:start}
   .section-heading{align-items:flex-start}
   .section-heading h2{font-size:31px}
   .unit-toggle{flex:0 0 auto}
