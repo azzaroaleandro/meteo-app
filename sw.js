@@ -1,7 +1,7 @@
-const CACHE = "marevero-v3";
+const CACHE = "marevero-v4";
 const BASE = new URL("./", self.location.href);
 const INDEX = new URL("index.html", BASE).href;
-const SHELL = ["index.html","styles.css?v=20260824-1","app.js?v=20260824-1","manifest.webmanifest","icon.svg"].map(function(path) {
+const SHELL = ["index.html","styles.css?v=20260824-1","app.js?v=20260824-2","manifest.webmanifest","icon.svg"].map(function(path) {
   return new URL(path, BASE).href;
 });
 const SHELL_URLS = new Set(SHELL);
