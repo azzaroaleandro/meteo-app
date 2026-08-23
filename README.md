@@ -11,6 +11,12 @@ Una web app mobile-first che mette nella stessa schermata meteo, vento, raffiche
 
 L’indice di consenso descrive l’accordo fra i modelli selezionati: **non è una probabilità scientificamente calibrata di accuratezza, non è una misura ufficiale di affidabilità e non garantisce il verificarsi della previsione**.
 
+## Webcam
+
+La sezione webcam seleziona automaticamente fino a due webcam pubbliche entro 15 km dalla località scelta. Il catalogo verificato copre tutte le 53 località attraverso 15 punti costieri fra Casalabate e Porto Cesareo.
+
+MareVero mostra soltanto nome, distanza e collegamento: non incorpora player, immagini, script o tracker del gestore. La pagina esterna viene contattata esclusivamente dopo il clic dell’utente; disponibilità, immagini e policy dipendono dal gestore della webcam.
+
 ## Dati, attribuzione e licenze
 
 Dati meteorologici e marini forniti da [Open-Meteo](https://open-meteo.com/), disponibili secondo [Creative Commons Attribution 4.0 International — CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.it). I dati sono aggregati e rielaborati da MareVero; Open-Meteo e i fornitori originari non approvano, certificano o sponsorizzano l’app.
@@ -19,7 +25,7 @@ Fonti e condizioni dettagliate: [Open-Meteo Data Sources & License](https://open
 
 ## Privacy
 
-Il codice dell’app non crea account, non imposta cookie e non integra analytics, pubblicità, pixel, fingerprinting, geolocalizzazione o profilazione. Il parametro URL `spot` contiene soltanto l’identificativo della località. Le coordinate predefinite sono richieste direttamente alle API Open-Meteo.
+Il codice dell’app non crea account, non imposta cookie e non integra analytics, pubblicità, pixel, fingerprinting, geolocalizzazione o profilazione. Le webcam sono collegamenti esterni e non vengono caricate dentro MareVero. Il parametro URL `spot` contiene soltanto l’identificativo della località. Le coordinate predefinite sono richieste direttamente alle API Open-Meteo.
 
 La Cache Storage del Service Worker conserva soltanto un elenco chiuso di file statici essenziali. Le risposte previsionali sono riutilizzate per non più di 10 minuti e restano soltanto nella memoria volatile della pagina fino alla sua chiusura; non sono salvate in storage persistente. Non viene mostrato un cookie banner perché non sono presenti cookie o tecnologie non necessarie.
 
